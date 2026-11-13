@@ -1,44 +1,41 @@
-// news-image-01 entry: "Friday 13 November 2026 — the world in one day".
+// news-image-01 — entry program (v4: "THE WORLD TODAY" front page).
 //
-// The program ships one image, entry.png, which sits beside this file.
-// It is a newspaper front page for Friday 13 November 2026: a masthead
-// over a 2x2 grid of captioned photographs that sum up the day's world
-// news — tankers hit in the Strait of Hormuz (and Iran's radar claim),
-// Nvidia CEO Jensen Huang resigning after 33 years, Europe winning a
-// seat at the next Ukraine peace talks, and the global Microsoft 365
-// outage. The image is a JPEG (302,306 bytes, 1024x1024 pixels) in a
-// file named entry.png; the gate accepts PNG or JPEG by first bytes and
-// the name stays entry.png either way, at most 1 MiB and 1024x1024 pixels.
+// Copies entry.png (the 1024x1024 front page for Friday 13 November 2026,
+// seventeen verified stories) to the output directory the harness gives us.
+// Node 22, standard library only; no network, no randomness.
 //
-// Node 22, standard library only. The program reads entry.png, writes it
-// to <output>/entry.png, and refuses to finish unless the written file
-// is byte-for-byte identical to the source (same length and same SHA-256).
-// <output> is /output inside the grader; outside it, set the
-// MAKEFUN_OUTPUT_DIR environment variable to a local directory instead:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// The image is baked into this repository as entry.png (JPEG bytes in a
+// file named entry.png — the rules allow that, "told apart by its first
+// bytes"). This program only moves those bytes to /output/entry.png (or
+// $MAKEFUN_OUTPUT_DIR/entry.png) and proves the copy is exact.
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+const here = dirname(fileURLToPath(import.meta.url));
+const source = join(here, "entry.png");
+const outDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
+const target = join(outDir, "entry.png");
 
-const sourcePath = resolve(dirname(fileURLToPath(import.meta.url)), 'entry.png');
-const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-const targetPath = join(outputDir, 'entry.png');
+// Read the front page and fingerprint it before we touch anything.
+const bytes = readFileSync(source);
+const digest = createHash("sha256").update(bytes).digest("hex");
 
-const image = readFileSync(sourcePath);
-const digest = createHash('sha256').update(image).digest('hex');
+// Make sure the output directory exists, then write the copy. The harness
+// sets MAKEFUN_OUTPUT_DIR; without it we fall back to /output.
+mkdirSync(outDir, { recursive: true });
+writeFileSync(target, bytes);
 
-if (!existsSync(outputDir)) {
-  mkdirSync(outputDir, { recursive: true });
+// Re-read what we wrote and refuse to finish unless it matches exactly:
+// same length, same bytes, same SHA-256 digest.
+const written = readFileSync(target);
+if (written.length !== bytes.length || !written.equals(bytes)) {
+  throw new Error("output is not byte-identical to entry.png");
 }
-writeFileSync(targetPath, image);
-
-const written = readFileSync(targetPath);
-if (written.length !== image.length || !written.equals(image)) {
-  throw new Error(`entry.png copy mismatch: wrote ${written.length} bytes, source is ${image.length}`);
-}
-const writtenDigest = createHash('sha256').update(written).digest('hex');
+const writtenDigest = createHash("sha256").update(written).digest("hex");
 if (writtenDigest !== digest) {
-  throw new Error(`entry.png copy mismatch: sha256 ${writtenDigest} != ${digest}`);
+  throw new Error(`SHA-256 mismatch: wrote ${writtenDigest}, expected ${digest}`);
 }
+
+console.log(`wrote ${target} (${bytes.length} bytes, sha256 ${digest})`);
